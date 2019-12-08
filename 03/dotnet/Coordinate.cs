@@ -16,14 +16,14 @@ namespace aoc
 
         public override bool Equals(object obj)
         {
-            return this.Equals(obj as Coordinate);
+            return Equals(obj as Coordinate);
         }
 
         public bool Equals(Coordinate p)
         {
             if (p is null) return false;
 
-            if (object.ReferenceEquals(this, p)) return true;
+            if (ReferenceEquals(this, p)) return true;
 
             return (X == p.X) && (Y == p.Y);
         }
@@ -31,8 +31,8 @@ namespace aoc
         public override int GetHashCode() => X * 0x00010000 + Y;
 
         public static bool operator ==(Coordinate left, Coordinate right) => 
-            left == null
-                ? right == null
+            left is null
+                ? right is null
                 : left.Equals(right);
 
         public static bool operator !=(Coordinate left, Coordinate right) =>  !(left == right);
