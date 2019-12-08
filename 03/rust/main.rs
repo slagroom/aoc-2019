@@ -206,15 +206,15 @@ fn main() {
         return (c.x.abs() + c.y.abs()) as u64;
     }
 
-    let mut intersections = first.iter()
+    let intersections = first.iter()
         .flat_map(|a| second.iter().map(move |b| intersection(a,b)))
         .filter_map(|x| x)
         .map(rectilinear_distance)
-        .collect::<Vec<_>>();
+        .filter(|x| x != &0u64);
 
-    intersections.sort();
-
-    let closest = intersections[1];
+    let closest = intersections
+        .min()
+        .unwrap();
 
     println!("part 1: {}", closest);
 }
