@@ -1,0 +1,47 @@
+#!/usr/bin/env sh
+
+if [ "$#" != "2" ]; then
+    echo "usage: run <day> <impl>" >&2
+    exit 1
+fi
+
+function normalize_day {
+    if [ "${#1}" = "1" ]; then
+        if [[ "123456789" == *"$1"* ]]; then
+            echo "0$1"
+            return
+        fi
+    fi
+    echo "$1"
+}
+
+day=$(normalize_day "$1")
+impl="$2"
+
+if [ ! -d "$day" ]; then
+    echo "err: couldn't find day '$day'" >&2
+    exit 1
+fi
+
+if [ ! -f "$day/$impl/Dockerfile" ]; then
+    echo "err: couldn't find '$impl' solution for day '$day'" >&2
+    exit 1
+fi
+
+img=$(docker build -q "$day/$impl")
+if [ $? -ne 0 ]; then
+    echo "err: failed to build Docker image from '$day/$impl'" >&2
+    exit 1
+fi
+
+cat "$day/input.txt" | docker container run --rm -i "$img"
+if [ $? -ne 0 ]; then
+    echo "err: failed to run Docker container from image '$img'" >&2
+    exit 1
+fi
+
+docker image rm "$img" 1>/dev/null
+if [ $? -ne 0 ]; then
+    echo "err: failed to remove Docker image '$img'" >&2
+    exit 1
+fi
