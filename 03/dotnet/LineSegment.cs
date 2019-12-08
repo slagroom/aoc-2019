@@ -9,6 +9,8 @@ namespace aoc
 
         public Coordinate End { get; private set; }
 
+        public uint Length => (uint)(Max - Min);
+
         public LineSegment(Coordinate start, Coordinate end)
         {
             if (start is null) throw new ArgumentNullException(nameof(start));
@@ -38,14 +40,20 @@ namespace aoc
             return null;
         }
 
-        public IEnumerable<Coordinate> Coordinates {
-            get {
-                var current = Start;
-                do  {
-                    yield return current;
-                    current = Next(current);
-                } while (current != End);
+        public uint PositionOf(Coordinate c)
+        {
+            var ex = new ArgumentOutOfRangeException(nameof(c), $"{c} not in range of {this}");
+
+            if (Horizontal)
+            {
+                if (c.Y != Fixed) throw ex;
+                if (c.X <= Min || c.X >= Max) throw ex;
+                return (uint)(c.X - Min);
             }
+
+            if (c.X != Fixed) throw ex;
+            if (c.Y <= Min || c.Y >= Max) throw ex;
+            return (uint)(c.Y- Min);
         }
 
         private bool InRangeOf(LineSegment other) => (other.Min <= Fixed) && (Fixed <= other.Max);
@@ -53,8 +61,8 @@ namespace aoc
         private bool Vertical => Start.X == End.X;
         private bool Horizontal => Start.Y == End.Y;
 
-        private int Min => Horizontal ? Math.Min(Start.Y, End.Y) : Math.Min(Start.X, End.X);
-        private int Max => Horizontal ? Math.Max(Start.Y, End.Y) : Math.Min(Start.X, End.X);
+        private int Min => Horizontal ? Math.Min(Start.X, End.X) : Math.Min(Start.Y, End.Y);
+        private int Max => Horizontal ? Math.Max(Start.X, End.X) : Math.Max(Start.Y, End.Y);
 
         private int Fixed => Horizontal ? Start.Y : Start.X;
 
