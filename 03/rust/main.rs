@@ -1,52 +1,30 @@
+use std::collections::HashMap;
 use std::io;
 use std::io::BufRead;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Coordinate {
-    x: i64,
-    y: i64,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Direction { Left, Right, Up, Down }
 
 #[derive(Debug)]
-struct Movement {
+struct Instruction {
     direction: Direction,
     distance: u16,
 }
 
-impl Movement {
-    fn apply(&self, to: &Coordinate) -> Coordinate {
-        let m = self.distance as i64;
-        return match self.direction {
-            Direction::Left => Coordinate { x: to.x - m, .. *to },
-            Direction::Right => Coordinate { x: to.x + m, .. *to },
-            Direction::Up => Coordinate { y: to.y + m, .. *to },
-            Direction::Down => Coordinate { y: to.y - m, .. *to },
-        };
+impl Instruction {
+    fn steps(&self) -> Steps {
+        return Steps::new(self.distance, self.direction);
     }
 }
 
-#[derive(Debug)]
-struct ParseMovementError {
-    input: String,
-}
+impl std::str::FromStr for Instruction {
 
-impl ParseMovementError {
-    fn new(input: &str) -> ParseMovementError {
-        return ParseMovementError { input: input.to_string() };
-    }
-}
+    type Err = ParseInstructionError;
 
-impl std::str::FromStr for Movement {
-
-    type Err = ParseMovementError;
-
-    fn from_str(s: &str) -> std::result::Result<Movement, ParseMovementError> {
+    fn from_str(s: &str) -> std::result::Result<Instruction, ParseInstructionError> {
 
         if s.len() < 2 {
-            return Err(ParseMovementError::new(&s));
+            return Err(ParseInstructionError::new(&s));
         }
 
         let direction = match s.chars().nth(0) {
@@ -54,167 +32,131 @@ impl std::str::FromStr for Movement {
             Some('U') => Ok(Direction::Up),
             Some('R') => Ok(Direction::Right),
             Some('D') => Ok(Direction::Down),
-            _ => Err(ParseMovementError::new(&s)),
+            _ => Err(ParseInstructionError::new(&s)),
         }?;
 
         let distance = match s[1..].parse::<u16>() {
             Ok(x) => Ok(x),
-            _ => Err(ParseMovementError::new(&s)),
+            _ => Err(ParseInstructionError::new(&s)),
         }?;
 
-        return Ok(Movement { direction: direction, distance: distance });
+        return Ok(Instruction { direction: direction, distance: distance });
     }
 }
 
-fn read_input() -> Vec<Vec<Movement>> {
+#[derive(Debug)]
+struct ParseInstructionError {
+    input: String,
+}
 
-    fn parse_movement_vec(s: String) -> Result<Vec<Movement>, ParseMovementError> {
+impl ParseInstructionError {
+    fn new(input: &str) -> ParseInstructionError {
+        return ParseInstructionError { input: input.to_string() };
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Coordinate {
+    x: i64,
+    y: i64,
+}
+
+impl Coordinate {
+    fn new(x: i64, y: i64) -> Coordinate {
+        return Coordinate { x, y };
+    }
+}
+
+type Step = fn(from: &Coordinate) -> Coordinate;
+
+struct Steps {
+    steps: u16,
+    direction: Direction,
+}
+
+impl Steps {
+    fn new(steps: u16, direction: Direction) -> Steps {
+        return Steps { steps, direction };
+    }
+}
+
+impl Iterator for Steps {
+    type Item = Step;
+    fn next(&mut self) -> Option<Step> {
+        if self.steps == 0 {
+            return None;
+        }
+        self.steps -= 1;
+        return match self.direction {
+            Direction::Left => Some(|c| Coordinate::new(c.x - 1, c.y)),
+            Direction::Right => Some(|c| Coordinate::new(c.x + 1, c.y)),
+            Direction::Up => Some(|c| Coordinate::new(c.x, c.y + 1)),
+            Direction::Down => Some(|c| Coordinate::new(c.x, c.y - 1)),
+        };
+    }
+}
+
+fn read_input() -> Vec<Vec<Instruction>> {
+
+    fn parse_instruction_vec(s: String) -> Result<Vec<Instruction>, ParseInstructionError> {
         return s.split(",")
-            .map(|i| i.parse::<Movement>())
+            .map(|i| i.parse::<Instruction>())
             .collect();
     }
 
     return io::stdin().lock()
         .lines()
         .map(|l| l.unwrap())
-        .map(parse_movement_vec)
+        .map(parse_instruction_vec)
         .map(|m| m.unwrap())
         .collect();
 }
 
-struct Magic<'a, T, U> {
-    current: Option<T>,
-    input: &'a mut dyn Iterator<Item=U>,
-    next_fn: fn(&T, &U) -> T,
-}
+fn coordinates<'a>(path: &'a Vec<Instruction>) -> HashMap<Coordinate, usize> {
 
-impl<'a, T, U> Magic<'a, T, U> {
-    fn new(
-        first: T,
-        input: &'a mut dyn Iterator<Item=U>,
-        next: fn(&T, &U) -> T
-    ) -> Magic<T, U> {
-        return Magic {
-            current: Some(first),
-            input: input,
-            next_fn: next,
-        };
-    }
-}
+    let mut coords = HashMap::new();
 
-impl<'a, T, U> Iterator for Magic<'a, T, U> {
+    path.iter()
+        .flat_map(|m| m.steps())
+        .scan(Coordinate::new(0, 0), | coord, step_fn | {
+            *coord = step_fn(coord);
+            return Some(*coord)
+        })
+        .enumerate()
+        .for_each(|(v, k)| {
+            if !coords.contains_key(&k) {
+                coords.insert(k, v);
+            }
+        });
 
-    type Item = T;
-
-    fn next(&mut self) -> Option<T> {
-        let ret = self.current.take()?;
-        self.current = match self.input.next() {
-            Some(u) => Some((self.next_fn)(&ret, &u)),
-            None => None,
-        };
-        return Some(ret);
-    }
-}
-
-trait MagicIter<'a, T, U> {
-    fn magic(&'a mut self, T, fn(&T, &U) -> T) -> Magic<'a, T, U>;
-}
-
-impl<'a, T, U, I> MagicIter<'a, T, U> for I where I: Iterator<Item=U> {
-    fn magic(&'a mut self, t: T, next: fn(&T, &U) -> T) -> Magic<'a, T, U> {
-        return Magic::new(t, self, next);
-    }
-}
-
-#[derive(Debug)]
-struct LineSegment {
-    start: Coordinate,
-    end: Coordinate,
-}
-
-#[derive(Debug)]
-struct InvalidLineSegmentError {
-    start: Coordinate,
-    end: Coordinate,
-}
-
-impl InvalidLineSegmentError {
-    fn new(start: Coordinate, end: Coordinate) -> InvalidLineSegmentError {
-        return InvalidLineSegmentError { start, end };
-    }
-}
-
-impl LineSegment {
-    fn new(start: Coordinate, end: Coordinate) -> Result<LineSegment, InvalidLineSegmentError> {
-
-        if start == end {
-            return Err(InvalidLineSegmentError::new(start, end));
-        }
-
-        if ! ((start.x == end.x) || (start.y == end.y)) {
-            return Err(InvalidLineSegmentError::new(start, end));
-        }
-
-        return Ok(LineSegment { start, end });
-    }
-}
-
-fn intersection(a: &LineSegment, b: &LineSegment) -> Option<Coordinate> {
-
-    fn is_vertical(ls: &LineSegment) -> bool { ls.start.x == ls.end.x }
-
-    let (v, h) = match (is_vertical(a), is_vertical(b)) {
-        (true, false) => Some((a, b)),
-        (false, true) => Some((b, a)),
-        _ => None,
-    }?;
-
-    fn sorted(arr: &mut [i64; 3]) -> [i64; 3] {
-        arr.sort();
-        return *arr;
-    }
-
-    let x_coords = sorted(&mut [ h.start.x, v.start.x, h.end.x ]);
-    let y_coords = sorted(&mut [ v.start.y, h.start.y, v.end.y ]);
-
-    if x_coords[1] == v.start.x && y_coords[1] == h.start.y {
-        return Some(Coordinate { x: v.start.x, y: h.start.y });
-    }
-
-    return None;
+    return coords;
 }
 
 fn main() {
 
-    let paths = read_input().iter()
-        .map(|p| {
-            p.iter()
-                .magic(Coordinate { x: 0, y: 0 }, | c, m | m.apply(c))
-                .collect::<Vec<Coordinate>>()
-                .windows(2)
-                .map(|w| LineSegment::new(w[0], w[1]).unwrap())
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
+    let paths = read_input();
 
     let [first, second] = match &paths[..] {
-        [a, b] => [a, b],
+        [a, b] => [coordinates(a), coordinates(b)],
         _ => panic!("expected 2 paths from input"),
     };
 
-    fn rectilinear_distance(c: Coordinate) -> u64 {
-        return (c.x.abs() + c.y.abs()) as u64;
+    let mut intersections = HashMap::new();
+
+    for (key, val) in first {
+        if let Some(v) = second.get(&key) {
+            intersections.insert(key, val + v + 2);
+        }
     }
 
-    let intersections = first.iter()
-        .flat_map(|a| second.iter().map(move |b| intersection(a,b)))
-        .filter_map(|x| x)
-        .map(rectilinear_distance)
-        .filter(|x| x != &0u64);
-
-    let closest = intersections
+    let part1 = intersections.keys()
+        .map(|k| k.x + k.y)
         .min()
         .unwrap();
 
-    println!("part 1: {}", closest);
+    let part2 = intersections.values().min().unwrap();
+
+    println!("part 1: {}", part1);
+
+    println!("part 2: {}", part2);
 }
