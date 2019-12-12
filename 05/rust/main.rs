@@ -79,6 +79,10 @@ impl IntcodeProcessor {
                 2 => self.mul(),
                 3 => self.input(),
                 4 => self.output(),
+                5 => self.jnz(),
+                6 => self.jz(),
+                7 => self.lt(),
+                8 => self.eq(),
                 99 => break,
                 x => return Err(InvalidInstructionError::new(&x, &self.program_counter)).unwrap(),
             }
@@ -133,6 +137,57 @@ impl IntcodeProcessor {
         self.program_counter += 2;
     }
 
+    fn jnz(&mut self) {
+
+        let arg1 = self.val_arg(1);
+        let arg2 = self.val_arg(2);
+
+        self.program_counter = match arg1 {
+            0 => self.program_counter + 3,
+            _ => arg2 as usize,
+        }
+    }
+
+    fn jz(&mut self) {
+
+        let arg1 = self.val_arg(1);
+        let arg2 = self.val_arg(2);
+
+        self.program_counter = match arg1 {
+            0 => arg2 as usize,
+            _ => self.program_counter + 3,
+        }
+    }
+
+    fn lt(&mut self) {
+
+        let arg1 = self.val_arg(1);
+        let arg2 = self.val_arg(2);
+        let dst = self.ref_arg(3);
+
+        self.store(dst as usize, match arg1 < arg2 {
+            true => 1,
+            false => 0,
+        });
+
+        self.program_counter += 4;
+    }
+
+    fn eq(&mut self) {
+
+        let arg1 = self.val_arg(1);
+        let arg2 = self.val_arg(2);
+        let dst = self.ref_arg(3);
+
+        self.store(dst as usize, match arg1 == arg2 {
+            true => 1,
+            false => 0,
+        });
+
+        self.program_counter += 4;
+    }
+
+
     fn val_arg(&self, position: usize) -> isize {
         let value = self.fetch(&(self.program_counter + position));
         let mode = self.arg_mode(position);
@@ -180,6 +235,11 @@ impl Error for InputError {}
 
 fn main() {
 
+    let program = io::stdin().lock().lines().next().unwrap().unwrap()
+        .split(",")
+        .map(|w| w.parse::<isize>().unwrap())
+        .collect::<Vec<_>>();
+
     fn input() -> isize {
         return io::stdin().lock().lines().next().unwrap().unwrap()
             .parse::<isize>()
@@ -193,14 +253,21 @@ fn main() {
 
     let mut computer = IntcodeProcessor::new(input, output);
 
-    io::stdin().lock().lines().next().unwrap().unwrap()
-        .split(",")
-        .map(|w| w.parse::<isize>().unwrap())
-        .enumerate()
+    program.iter().enumerate()
         .for_each(|(addr,word)| {
-            computer.store(addr, word);
+            computer.store(addr, *word);
         });
     
+    println!("part 1:");
+    computer.run();
+
+    let mut computer = IntcodeProcessor::new(input, output);
+
+    program.iter().enumerate()
+        .for_each(|(addr,word)| {
+            computer.store(addr, *word);
+        });
+
+    println!("\r\npart 2:");
     computer.run();
 }
-
