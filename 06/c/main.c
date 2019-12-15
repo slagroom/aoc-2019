@@ -27,7 +27,11 @@ char * read_line()
     size_t linecap = 0;
     ssize_t linelen = getline(&line, &linecap, stdin);
 
-    if (linelen <= 0) { return NULL; }
+    if (linelen <= 0)
+    {
+        free(line);
+        return NULL;
+    }
 
     int i = linelen - 1;
     while (line[i] == '\r' || line[i] == '\n')
