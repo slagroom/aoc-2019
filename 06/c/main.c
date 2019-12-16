@@ -145,6 +145,83 @@ size_t parentages(struct Graph *graph, size_t depth)
     return total;
 }
 
+int depth(struct Graph *graph, char *val)
+{
+    if (strcmp(graph->name, val) == 0)
+    {
+        return 0;
+    }
+
+    for (int i = 0; i < graph->length; i++)
+    {
+        int d = depth(graph->nodes[i], val);
+        if (d >= 0)
+        {
+            return d + 1;
+        }
+    }
+
+    return -1;
+}
+
+size_t distance(struct Graph *graph, char *a, char *b)
+{
+    // A depth of -1 indicates that the value hasn't been found yet.
+    int depth_a = -1;
+    int depth_b = -1;
+
+    // If either value is at this node then its depth is 0 and the shortest
+    // path is the depth of the other node from this point.
+    if (strcmp(graph->name, a) == 0)
+    {
+        depth_a = 0;
+    }
+    if (strcmp(graph->name, b) == 0)
+    {
+        depth_b = 0;
+    }
+
+    for (int i = 0; i < graph->length; i++)
+    {
+        // Keep track of whether we found 'a' in this child because if we find
+        // both values in the same child then the shortest path is entirely
+        // within that subtree.
+        int found_a = 0;
+
+        // If we haven't already found 'a', search in this child.
+        if (depth_a < 0)
+        {
+            depth_a = depth(graph->nodes[i], a);
+            if (depth_a >= 0)
+            {
+                depth_a++;
+                found_a = 1;
+            }
+        }
+
+        if (depth_b < 0)
+        {
+            depth_b = depth(graph->nodes[i], b);
+            if (depth_b >= 0)
+            {
+                if (found_a)
+                {
+                    return distance(graph->nodes[i], a, b);
+                }
+
+                depth_b++;
+            }
+        }
+
+        if (depth_a >= 0 && depth_b >= 0)
+        {
+            return depth_a + depth_b;
+        }
+    }
+
+    return -1;
+}
+
 void print(struct Graph *graph, int indent)
 {
     printf("%*s%s (len: %zu, cap: %zu)\r\n", indent*2, "", graph->name, graph->length, graph->capacity);
@@ -329,7 +406,14 @@ int main(int argc, char **argv)
         stack = deferred;
     }
 
-    printf("%zu\r\n", parentages(graph, 1));
+    printf("part 1: %zu\r\n", parentages(graph, 1));
+
+    // The distance is between the objects orbited by "YOU" and "SAN", not
+    // between "YOU" and "SAN" directly. I suspect this function actually
+    // doesn't work in the case where one element is a descendent of the other
+    // because the ancestors parent will be farther from the descendent than
+    // the ancestor rather than closer.
+    printf("part 2: %zu\r\n", distance(graph, "YOU", "SAN") - 2);
     free_stack(stack);
     free_graph(graph);
     return 0;
