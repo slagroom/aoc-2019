@@ -179,37 +179,40 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	program := readProgram(scanner)
-	
-	input := func() int32 {
-		scanner.Scan()
-		in, err := strconv.ParseInt(scanner.Text(), 10, 32)
-		if err != nil {
-			panic(err)
-		}
-		return int32(in)
+
+	in := make(chan int32)
+	out := make(chan int32)
+
+	amplifiers := []func() {}
+
+	for _, v := range []int32 { 4,3,2,1,0 } {
+
+		in <- v
+
+		amp := func(inChan <-chan int32, outChan chan<- int32) func() {
+
+			inputFn := func() int32 { return <-inChan }
+			outputFn := func(v int32) { outChan<- v }
+			computer := NewIntcodeProcessor(inputFn, outputFn)
+			
+			for addr, word := range program {
+				computer.Store(uint32(addr), word);
+			}
+
+			return func() {
+				computer.Run();
+			}
+
+		}(in, out)
+
+		amplifiers = append(amplifiers, amp)
+		in = out
+		out = make(chan int32)
 	}
 
-	output := func(o int32) {
-		fmt.Println(o)
+	for _, amp := range amplifiers {
+		go amp()
 	}
 
-	computer := NewIntcodeProcessor(input, output)
-
-	for addr, word := range program {
-		computer.Store(uint32(addr), word);
-	}
-    
-    fmt.Println("part 1:");
-    computer.Run();
-
-    computer = NewIntcodeProcessor(input, output)
-
-    for addr, word := range program {
-		computer.Store(uint32(addr), word);
-	}
-    
-    fmt.Println("part 2:");
-    computer.Run();
-
-
+	fmt.Println(<-out)
 }
