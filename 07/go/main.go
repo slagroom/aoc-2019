@@ -180,19 +180,29 @@ func main() {
 
 	program := readProgram(scanner)
 
-	in := make(chan int32)
-	out := make(chan int32)
+	in := make(chan int32, 2)
+	out := make(chan int32, 2)
 
 	amplifiers := []func() {}
 
-	for _, v := range []int32 { 4,3,2,1,0 } {
+	for i, v := range []int32 { 1, 0, 4, 3, 2 } {
 
 		in <- v
 
+		if (i == 0) {
+			in <- 0
+		}
+
 		amp := func(inChan <-chan int32, outChan chan<- int32) func() {
 
-			inputFn := func() int32 { return <-inChan }
-			outputFn := func(v int32) { outChan<- v }
+			inputFn := func() int32 { 
+				return <- inChan
+			}
+
+			outputFn := func(o int32) { 
+				outChan <- o
+			}
+
 			computer := NewIntcodeProcessor(inputFn, outputFn)
 			
 			for addr, word := range program {
@@ -207,12 +217,12 @@ func main() {
 
 		amplifiers = append(amplifiers, amp)
 		in = out
-		out = make(chan int32)
+		out = make(chan int32, 2)
 	}
 
 	for _, amp := range amplifiers {
-		go amp()
+		amp()
 	}
 
-	fmt.Println(<-out)
+	fmt.Println(<- in)
 }
