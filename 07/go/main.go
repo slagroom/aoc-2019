@@ -14,14 +14,20 @@ type intcodeProcessor struct {
 	memory         map[uint32]int32
 	inputFn        func() int32
 	outputFn       func(int32)
+	onHalt         func()
 }
 
-func NewIntcodeProcessor(input func() int32, output func(int32)) intcodeProcessor {
+func NewIntcodeProcessor(
+	input func() int32,
+	output func(int32),
+	onHalt func()) intcodeProcessor {
+
 	return intcodeProcessor{
 		programCounter: 0,
 		memory:         make(map[uint32]int32),
 		inputFn:        input,
 		outputFn:       output,
+		onHalt:         onHalt,
 	}
 }
 
@@ -100,6 +106,7 @@ func (self *intcodeProcessor) Run() {
 			panic(fmt.Errorf("Invalid instruction '%v' at address '%v'", self.opCode(), self.programCounter))
 		}
 	}
+	self.onHalt()
 }
 
 func (self *intcodeProcessor) add() {
@@ -217,7 +224,28 @@ func Permutations(arr []int32) <-chan []int32 {
 	return out
 }
 
-func something(program []int32, phases[]int32) int32 {
+
+func newAmplifier(
+	program []int32,
+	input <-chan int32,
+	output chan<- int32,
+	onHalt func()) func() {
+
+	computer := NewIntcodeProcessor(
+		func() int32 { return <-input },
+		func(o int32) { output<- o },
+		onHalt)
+
+	for addr, word := range program {
+		computer.Store(uint32(addr), word)
+	}
+
+	return func() {
+		computer.Run()
+	}
+}
+
+func part1(program []int32, phases []int32) int32 {
 
 	in := make(chan int32, 2)
 	out := make(chan int32, 2)
@@ -232,29 +260,8 @@ func something(program []int32, phases[]int32) int32 {
 			in <- 0
 		}
 
-		amp := func(inChan <-chan int32, outChan chan<- int32) func() {
+		amplifiers = append(amplifiers, newAmplifier(program, in, out, func(){}))
 
-			inputFn := func() int32 {
-				return <-inChan
-			}
-
-			outputFn := func(o int32) {
-				outChan <- o
-			}
-
-			computer := NewIntcodeProcessor(inputFn, outputFn)
-
-			for addr, word := range program {
-				computer.Store(uint32(addr), word)
-			}
-
-			return func() {
-				computer.Run()
-			}
-
-		}(in, out)
-
-		amplifiers = append(amplifiers, amp)
 		in = out
 		out = make(chan int32, 2)
 	}
@@ -266,6 +273,45 @@ func something(program []int32, phases[]int32) int32 {
 	return <-in
 }
 
+func part2(program []int32, phases []int32) int32 {
+
+	count := len(phases)
+
+	chans := make([]chan int32, count)
+	for i, v := range phases {
+		chans[i] = make(chan int32, 1<<16)
+		chans[i] <- v
+	}
+
+	chans[0] <- 0
+
+	waits := make([]chan struct{}, count)
+	for i := range waits {
+		waits[i] = make(chan struct{}, 1)
+	}
+
+	amplifiers := make([]func(), count)
+	for i := range amplifiers {
+
+		input := chans[i]
+		output := chans[(i+1)%count]
+		wait := waits[i]
+		onHalt := func() { wait <- struct{}{} }
+
+		amplifiers[i] = newAmplifier(program, input, output, onHalt)
+	}
+
+	for _, amp := range amplifiers {
+		go amp()
+	}
+
+	for _, wait := range waits {
+		<- wait
+	}
+
+	return <- chans[0]
+}
+
 func main() {
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -274,12 +320,23 @@ func main() {
 
 	max := int32(math.MinInt32)
 
-	for phases := range Permutations([]int32 { 0, 1, 2, 3, 4 }) {
-		out := something(program, phases)
+	for phases := range Permutations([]int32{0, 1, 2, 3, 4}) {
+		out := part1(program, phases)
 		if out > max {
 			max = out
 		}
 	}
 
 	fmt.Println("part 1:", max)
+
+	max = int32(math.MinInt32)
+
+	for phases := range Permutations([]int32{5, 6, 7, 8, 9}) {
+		out := part2(program, phases)
+		if out > max {
+			max = out
+		}
+	}
+
+	fmt.Println("part 2:", max)
 }
