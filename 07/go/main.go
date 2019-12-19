@@ -194,18 +194,37 @@ func readProgram(scanner *bufio.Scanner) []int32 {
 	return mapInt(strings.Split(scanner.Text(), ","))
 }
 
-func main() {
+func Permutations(arr []int32) <-chan []int32 {
+	out := make(chan []int32)
+	go func() {
+		if len(arr) == 1 {
+			out <- arr
+		} else if len(arr) > 1 {
+			for i, v := range arr {
+				others := make([]int32, 0, len(arr)-1)
+				others = append(others, arr[:i]...)
+				others = append(others, arr[i+1:]...)
+				for subperm := range Permutations(others) {
+					perm := make([]int32, 0, len(arr))
+					perm = append(perm, v)
+					perm = append(perm, subperm...)
+					out <- perm
+				}
+			}
+		}
+		close(out)
+	}()
+	return out
+}
 
-	scanner := bufio.NewScanner(os.Stdin)
-
-	program := readProgram(scanner)
+func something(program []int32, phases[]int32) int32 {
 
 	in := make(chan int32, 2)
 	out := make(chan int32, 2)
 
 	amplifiers := []func(){}
 
-	for i, v := range []int32{1, 0, 4, 3, 2} {
+	for i, v := range phases {
 
 		in <- v
 
@@ -241,8 +260,26 @@ func main() {
 	}
 
 	for _, amp := range amplifiers {
-		amp()
+		go amp()
 	}
 
-	fmt.Println(<-in)
+	return <-in
+}
+
+func main() {
+
+	scanner := bufio.NewScanner(os.Stdin)
+
+	program := readProgram(scanner)
+
+	max := int32(math.MinInt32)
+
+	for phases := range Permutations([]int32 { 0, 1, 2, 3, 4 }) {
+		out := something(program, phases)
+		if out > max {
+			max = out
+		}
+	}
+
+	fmt.Println("part 1:", max)
 }
